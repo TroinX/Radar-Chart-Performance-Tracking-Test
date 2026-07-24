@@ -1,0 +1,6 @@
+{
+  "name": "Student Radar Tracking App",
+  "description": "Multi-grade and multi-class student tracking application featuring customizable criteria radar charts, overall summarizations, image exports, and Google Drive sync.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
