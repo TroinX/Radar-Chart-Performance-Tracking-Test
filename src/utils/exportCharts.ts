@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { MiniTab, Student } from '../types';
+import { getOrderedCriteria } from './chartHelpers';
 
 /**
  * Converts an SVG element to a PNG or JPEG Data URL or Blob
@@ -7,7 +8,8 @@ import { MiniTab, Student } from '../types';
 export async function svgToImageDataUrl(
   svgElement: SVGSVGElement,
   format: 'png' | 'jpeg' = 'png',
-  quality = 0.95
+  quality = 0.95,
+  bgColor: string = 'transparent'
 ): Promise<string> {
   const xml = new XMLSerializer().serializeToString(svgElement);
   const svgBlob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
@@ -29,8 +31,11 @@ export async function svgToImageDataUrl(
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Failed to get 2d context');
 
-  // Fill white background for JPEG
-  if (format === 'jpeg') {
+  // Fill solid background if specified, or fill white for JPEG
+  if (bgColor && bgColor !== 'transparent') {
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else if (format === 'jpeg') {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
@@ -47,12 +52,13 @@ export async function svgToImageDataUrl(
 export async function downloadChartImage(
   svgElement: SVGSVGElement,
   filename: string,
-  format: 'png' | 'jpeg' = 'png'
+  format: 'png' | 'jpeg' = 'png',
+  bgColor: string = 'transparent'
 ): Promise<void> {
-  const dataUrl = await svgToImageDataUrl(svgElement, format);
+  const dataUrl = await svgToImageDataUrl(svgElement, format, 0.95, bgColor);
   const link = document.createElement('a');
   link.href = dataUrl;
-  link.download = `${filename}.${format}`;
+  link.download = filename.toLowerCase().endsWith(`.${format}`) ? filename : `${filename}.${format}`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -64,10 +70,13 @@ export async function downloadChartImage(
 export async function downloadAllChartsInMiniTab(
   miniTab: MiniTab,
   format: 'png' | 'jpeg' = 'png',
+  bgColor: string = 'transparent',
+  customZipName?: string,
   onProgress?: (current: number, total: number) => void
 ): Promise<void> {
   const zip = new JSZip();
-  const folderName = `${miniTab.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_charts`;
+  const rawZipName = customZipName?.trim() || `${miniTab.name}_charts`;
+  const folderName = rawZipName.replace(/[^a-zA-Z0-9_-]/g, '_');
   const folder = zip.folder(folderName);
 
   // Compute Whole Class Average performance scores
@@ -109,12 +118,12 @@ export async function downloadAllChartsInMiniTab(
       const student = exportStudents[i];
       if (onProgress) onProgress(i + 1, total);
 
-      const svgString = renderStudentRadarSVGString(miniTabWithAvg, student);
+      const svgString = renderStudentRadarSVGString(miniTabWithAvg, student, bgColor);
       container.innerHTML = svgString;
 
       const svgElem = container.querySelector('svg');
       if (svgElem) {
-        const dataUrl = await svgToImageDataUrl(svgElem, format);
+        const dataUrl = await svgToImageDataUrl(svgElem, format, 0.95, bgColor);
         const base64Data = dataUrl.replace(/^data:image\/(png|jpeg);base64,/, '');
         const safeStudentName = student.name.replace(/[^a-zA-Z0-9_-]/g, '_');
         const prefix = i === 0 ? '0' : `${i}`;
@@ -137,9 +146,14 @@ export async function downloadAllChartsInMiniTab(
 /**
  * Pure helper to render full SVG string for a student
  */
-function renderStudentRadarSVGString(miniTab: MiniTab, student: Student): string {
+function renderStudentRadarSVGString(
+  miniTab: MiniTab,
+  student: Student,
+  bgColor: string = 'transparent'
+): string {
   const { circles, groups, criteria, performances, chartSettings } = miniTab;
-  const totalCriteria = criteria.length;
+  const orderedCriteria = getOrderedCriteria(criteria, groups);
+  const totalCriteria = orderedCriteria.length;
   const size = 800;
   const margin = 140;
   const cx = size / 2;
@@ -155,7 +169,7 @@ function renderStudentRadarSVGString(miniTab: MiniTab, student: Student): string
   const groupRanges: any[] = [];
   groups.forEach((group) => {
     const groupIndices: number[] = [];
-    criteria.forEach((c, idx) => {
+    orderedCriteria.forEach((c, idx) => {
       if (c.groupId === group.id) groupIndices.push(idx);
     });
 
@@ -172,7 +186,7 @@ function renderStudentRadarSVGString(miniTab: MiniTab, student: Student): string
   // Student performance points
   const studentPerf = performances[student.id] || {};
   const points: { x: number; y: number }[] = [];
-  criteria.forEach((c, idx) => {
+  orderedCriteria.forEach((c, idx) => {
     const score = Math.min(maxScore, Math.max(0, studentPerf[c.id] || 0));
     const r = (score / maxScore) * radius;
     const angle = getAngle(idx);
@@ -211,7 +225,7 @@ function renderStudentRadarSVGString(miniTab: MiniTab, student: Student): string
   }
 
   let spokesSVG = '';
-  criteria.forEach((_, idx) => {
+  orderedCriteria.forEach((_, idx) => {
     const angle = getAngle(idx);
     const x2 = cx + radius * Math.cos(angle);
     const y2 = cy + radius * Math.sin(angle);
@@ -252,25 +266,49 @@ function renderStudentRadarSVGString(miniTab: MiniTab, student: Student): string
   });
 
   let criteriaLabelsSVG = '';
-  criteria.forEach((criterion, idx) => {
+  orderedCriteria.forEach((criterion, idx) => {
     const angle = getAngle(idx);
-    const lx = cx + (radius + 18) * Math.cos(angle);
-    const ly = cy + (radius + 18) * Math.sin(angle);
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
-    let textAnchor = 'middle';
-    if (cos > 0.25) textAnchor = 'start';
-    else if (cos < -0.25) textAnchor = 'end';
-    let dy = '0.35em';
-    if (sin > 0.5) dy = '0.8em';
-    else if (sin < -0.5) dy = '-0.2em';
 
-    criteriaLabelsSVG += `<text x="${lx}" y="${ly}" fill="#1e293b" font-size="10.5" font-weight="500" text-anchor="${textAnchor}" dy="${dy}">${criterion.name}</text>`;
+    const isDense = totalCriteria >= 10;
+    const labelDist = radius + 18 + (isDense ? (idx % 2) * 24 : 0);
+
+    const lx = cx + labelDist * cos;
+    const ly = cy + labelDist * sin;
+
+    let textAnchor = 'middle';
+    if (cos > 0.08) textAnchor = 'start';
+    else if (cos < -0.08) textAnchor = 'end';
+
+    let dy = '0.35em';
+    if (sin > 0.6) dy = '0.8em';
+    else if (sin > 0.2) dy = '0.5em';
+    else if (sin < -0.6) dy = '-0.3em';
+    else if (sin < -0.2) dy = '0em';
+
+    const maxCharLength = totalCriteria > 20 ? 18 : totalCriteria > 14 ? 22 : totalCriteria > 10 ? 28 : 36;
+    const displayName =
+      criterion.name.length > maxCharLength
+        ? `${criterion.name.substring(0, maxCharLength - 1)}…`
+        : criterion.name;
+
+    const safeName = displayName
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    criteriaLabelsSVG += `<text x="${lx}" y="${ly}" fill="#1e293b" font-size="10.5" font-weight="500" text-anchor="${textAnchor}" dy="${dy}">${safeName}</text>`;
   });
+
+  const bgRectSVG =
+    bgColor && bgColor !== 'transparent'
+      ? `<rect width="${size}" height="${size}" fill="${bgColor}"/>`
+      : '';
 
   return `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
-      <rect width="${size}" height="${size}" fill="#ffffff"/>
+      ${bgRectSVG}
       <text x="${cx}" y="36" fill="#0f172a" font-size="18" font-weight="700" text-anchor="middle">${student.name} - ${miniTab.name}</text>
       ${groupSlicesSVG}
       ${circlesSVG}

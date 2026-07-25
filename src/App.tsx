@@ -5,6 +5,7 @@ import { saveLocalState, loadLocalState, exportStateAsJSON, importStateFromJSON,
 import { RadarChart } from './components/RadarChart';
 import { StudentsDataEditor } from './components/StudentsDataEditor';
 import { OverallView } from './components/OverallView';
+import { ExportModal } from './components/ExportModal';
 import { downloadChartImage, downloadAllChartsInMiniTab } from './utils/exportCharts';
 import {
   Plus,
@@ -42,6 +43,10 @@ export default function App() {
   const [downloadAllMiniTabCharts, setDownloadAllMiniTabCharts] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
+
+  // Export popup modal state
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportDefaultFilename, setExportDefaultFilename] = useState('');
 
   // Renaming inline states
   const [editingItem, setEditingItem] = useState<{ type: 'grade' | 'class' | 'miniTab'; id: string } | null>(null);
@@ -314,32 +319,56 @@ export default function App() {
     setEditingItem(null);
   };
 
-  // CHART EXPORT DISPATCH
-  const handleExport = async () => {
+  // OPEN EXPORT PREVIEW MODAL
+  const handleOpenExportModal = () => {
+    if (!activeMiniTab) return;
+
+    if (downloadAllMiniTabCharts) {
+      const defaultZipName = `${activeMiniTab.name}_charts`.replace(/[^a-zA-Z0-9_-]/g, '_');
+      setExportDefaultFilename(defaultZipName);
+    } else {
+      const isClassAvg = selectedStudentId === 'ALL_CLASS';
+      const studentName = isClassAvg
+        ? 'Whole_Class_Average'
+        : activeMiniTab.students.find((s) => s.id === selectedStudentId)?.name || 'student';
+      const defaultName = `${activeClassTab.name}_${activeMiniTab.name}_${studentName}`.replace(
+        /[^a-zA-Z0-9_-]/g,
+        '_'
+      );
+      setExportDefaultFilename(defaultName);
+    }
+    setIsExportModalOpen(true);
+  };
+
+  // EXECUTE EXPORT WITH USER OPTIONS FROM MODAL
+  const handleConfirmExport = async (options: {
+    filename: string;
+    bgColor: string;
+    format: 'png' | 'jpeg';
+  }) => {
     if (!activeMiniTab) return;
     setIsExporting(true);
 
     try {
       if (downloadAllMiniTabCharts) {
         // Batch ZIP download for all students in the mini tab
-        await downloadAllChartsInMiniTab(activeMiniTab, exportFormat, (current, total) => {
-          setExportProgress({ current, total });
-        });
+        await downloadAllChartsInMiniTab(
+          activeMiniTab,
+          options.format,
+          options.bgColor,
+          options.filename,
+          (current, total) => {
+            setExportProgress({ current, total });
+          }
+        );
       } else {
         // Single active chart SVG export
         const svgElem = chartSvgContainerRef.current?.querySelector('svg');
         if (svgElem) {
-          const isClassAvg = selectedStudentId === 'ALL_CLASS';
-          const studentName = isClassAvg
-            ? 'Whole_Class_Average'
-            : activeMiniTab.students.find((s) => s.id === selectedStudentId)?.name || 'student';
-          const filename = `${activeClassTab.name}_${activeMiniTab.name}_${studentName}`.replace(
-            /[^a-zA-Z0-9_-]/g,
-            '_'
-          );
-          await downloadChartImage(svgElem, filename, exportFormat);
+          await downloadChartImage(svgElem, options.filename, options.format, options.bgColor);
         }
       }
+      setIsExportModalOpen(false);
     } catch (err) {
       console.error('Export failed:', err);
       alert('Export failed. Please check your browser permissions or try again.');
@@ -884,7 +913,7 @@ export default function App() {
 
                       {/* EXPORT ACTION BUTTON */}
                       <button
-                        onClick={handleExport}
+                        onClick={handleOpenExportModal}
                         disabled={isExporting}
                         className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all disabled:opacity-50"
                       >
@@ -974,6 +1003,18 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* EXPORT OPTIONS PREVIEW MODAL */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        onConfirmExport={handleConfirmExport}
+        defaultFilename={exportDefaultFilename}
+        isBatchExport={downloadAllMiniTabCharts}
+        initialFormat={exportFormat}
+        isExporting={isExporting}
+        exportProgress={exportProgress}
+      />
     </div>
   );
 }

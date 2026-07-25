@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { MiniTab, Student, CriteriaGroup, Criterion } from '../types';
+import { getOrderedCriteria } from '../utils/chartHelpers';
 import { Plus, Trash2, Eye, EyeOff, Settings, UserPlus, Sliders, CheckSquare, Square, ChevronDown, ChevronUp, Layers, Users } from 'lucide-react';
 
 interface StudentsDataEditorProps {
@@ -150,9 +151,14 @@ export const StudentsDataEditor: React.FC<StudentsDataEditorProps> = ({
       updatedPerf[s.id][newCriterion.id] = Math.ceil(miniTab.circles.count / 2);
     });
 
+    const newCriteriaList = getOrderedCriteria(
+      [...miniTab.criteria, newCriterion],
+      miniTab.groups
+    );
+
     onUpdateMiniTab({
       ...miniTab,
-      criteria: [...miniTab.criteria, newCriterion],
+      criteria: newCriteriaList,
       performances: updatedPerf,
     });
 
@@ -471,6 +477,40 @@ export const StudentsDataEditor: React.FC<StudentsDataEditorProps> = ({
               </div>
             </div>
 
+            {/* ADD CRITERION INPUT */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-2">
+              <span className="text-xs font-bold text-slate-700 block">Add Criterion Line</span>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  value={selectedGroupIdForCriterion}
+                  onChange={(e) => setSelectedGroupIdForCriterion(e.target.value)}
+                  className="px-2 py-1.5 text-xs rounded-xl border border-slate-300 focus:outline-none"
+                >
+                  {miniTab.groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  type="text"
+                  placeholder="Criterion line text..."
+                  value={newCriterionName}
+                  onChange={(e) => setNewCriterionName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddCriterion()}
+                  className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:border-blue-500"
+                />
+
+                <button
+                  onClick={handleAddCriterion}
+                  className="px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-medium hover:bg-blue-700 transition-colors shadow-xs"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+
             {/* LIST GROUPS WITH CUSTOM RESIZE / ROTATE / SHOW TOGGLE */}
             <div className="space-y-3">
               {miniTab.groups.map((group) => {
@@ -596,40 +636,6 @@ export const StudentsDataEditor: React.FC<StudentsDataEditorProps> = ({
                   </div>
                 );
               })}
-            </div>
-
-            {/* ADD CRITERION INPUT */}
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-2">
-              <span className="text-xs font-bold text-slate-700 block">Add Criterion Line</span>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <select
-                  value={selectedGroupIdForCriterion}
-                  onChange={(e) => setSelectedGroupIdForCriterion(e.target.value)}
-                  className="px-2 py-1.5 text-xs rounded-xl border border-slate-300 focus:outline-none"
-                >
-                  {miniTab.groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </select>
-
-                <input
-                  type="text"
-                  placeholder="Criterion line text..."
-                  value={newCriterionName}
-                  onChange={(e) => setNewCriterionName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddCriterion()}
-                  className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:border-blue-500"
-                />
-
-                <button
-                  onClick={handleAddCriterion}
-                  className="px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-medium hover:bg-blue-700 transition-colors shadow-xs"
-                >
-                  Add
-                </button>
-              </div>
             </div>
           </div>
         )}

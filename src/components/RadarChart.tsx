@@ -1,5 +1,6 @@
 import React from 'react';
 import { MiniTab, Student } from '../types';
+import { getOrderedCriteria } from '../utils/chartHelpers';
 
 interface RadarChartProps {
   miniTab: MiniTab;
@@ -24,7 +25,8 @@ export const RadarChart: React.FC<RadarChartProps> = ({
 }) => {
   const { circles, groups, criteria, students, performances, chartSettings } = miniTab;
 
-  const totalCriteria = criteria.length;
+  const orderedCriteria = getOrderedCriteria(criteria, groups);
+  const totalCriteria = orderedCriteria.length;
   if (totalCriteria === 0) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400 text-sm border border-dashed rounded-xl border-gray-300">
@@ -60,7 +62,7 @@ export const RadarChart: React.FC<RadarChartProps> = ({
 
   groups.forEach((group) => {
     const groupCriteriaIndices: number[] = [];
-    criteria.forEach((c, idx) => {
+    orderedCriteria.forEach((c, idx) => {
       if (c.groupId === group.id) {
         groupCriteriaIndices.push(idx);
       }
@@ -214,7 +216,7 @@ export const RadarChart: React.FC<RadarChartProps> = ({
         })}
 
         {/* 3. AXIS SPOKE LINES (CRITERIA LINES) */}
-        {criteria.map((criterion, idx) => {
+        {orderedCriteria.map((criterion, idx) => {
           const angle = getAngle(idx);
           const x2 = cx + radius * Math.cos(angle);
           const y2 = cy + radius * Math.sin(angle);
@@ -237,7 +239,7 @@ export const RadarChart: React.FC<RadarChartProps> = ({
           const studentPerf = performances[student.id] || {};
           const points: { x: number; y: number; criterionId: string; score: number }[] = [];
 
-          criteria.forEach((c, idx) => {
+          orderedCriteria.forEach((c, idx) => {
             const score = Math.min(maxScore, Math.max(0, studentPerf[c.id] || 0));
             const r = (score / maxScore) * radius;
             const angle = getAngle(idx);
@@ -371,26 +373,36 @@ export const RadarChart: React.FC<RadarChartProps> = ({
         })}
 
         {/* 6. CRITERIA LABELS ON REAR SIDE OF LAST CIRCLE */}
-        {criteria.map((criterion, idx) => {
+        {orderedCriteria.map((criterion, idx) => {
           const angle = getAngle(idx);
-          const labelDist = radius + 18;
-          const lx = cx + labelDist * Math.cos(angle);
-          const ly = cy + labelDist * Math.sin(angle);
-
-          // Anchor positioning based on angle cos/sin
           const cos = Math.cos(angle);
           const sin = Math.sin(angle);
 
+          // Stagger label radial distance for dense criteria to prevent adjacent overlaps
+          const isDense = totalCriteria >= 10;
+          const labelDist = radius + 18 + (isDense ? (idx % 2) * 24 : 0);
+
+          const lx = cx + labelDist * cos;
+          const ly = cy + labelDist * sin;
+
+          // Precise anchor positioning based on angle cos
           let textAnchor = 'middle';
-          if (cos > 0.25) textAnchor = 'start';
-          else if (cos < -0.25) textAnchor = 'end';
+          if (cos > 0.08) textAnchor = 'start';
+          else if (cos < -0.08) textAnchor = 'end';
 
+          // Vertical offset based on sin
           let dy = '0.35em';
-          if (sin > 0.5) dy = '0.8em';
-          else if (sin < -0.5) dy = '-0.2em';
+          if (sin > 0.6) dy = '0.8em';
+          else if (sin > 0.2) dy = '0.5em';
+          else if (sin < -0.6) dy = '-0.3em';
+          else if (sin < -0.2) dy = '0em';
 
-          // Truncate long criteria for chart view if necessary, full text on title hover
-          const displayName = criterion.name;
+          // Truncate long criteria for chart view when dense, full text on hover
+          const maxCharLength = totalCriteria > 20 ? 18 : totalCriteria > 14 ? 22 : totalCriteria > 10 ? 28 : 36;
+          const displayName =
+            criterion.name.length > maxCharLength
+              ? `${criterion.name.substring(0, maxCharLength - 1)}…`
+              : criterion.name;
 
           return (
             <g key={`criteria-label-${criterion.id}`}>
@@ -405,7 +417,7 @@ export const RadarChart: React.FC<RadarChartProps> = ({
                 className="select-none transition-colors hover:fill-blue-600 hover:font-bold cursor-default"
               >
                 <title>{criterion.name}</title>
-                {displayName.length > 36 ? `${displayName.substring(0, 34)}…` : displayName}
+                {displayName}
               </text>
             </g>
           );
