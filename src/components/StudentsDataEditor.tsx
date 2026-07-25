@@ -287,41 +287,6 @@ export const StudentsDataEditor: React.FC<StudentsDataEditorProps> = ({
 
           return (
             <div className="space-y-4">
-              {/* DISPLAY TARGET SWITCHER: WHOLE CLASS VS INDIVIDUAL DROPDOWN */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
-                <span className="text-xs font-bold text-slate-700">Display Target:</span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => onSelectStudent('ALL_CLASS')}
-                    className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
-                      isClassAvgMode
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    <span>Whole Class</span>
-                  </button>
-
-                  <select
-                    value={isClassAvgMode ? '' : selectedStudentId || ''}
-                    onChange={(e) => onSelectStudent(e.target.value || 'ALL_CLASS')}
-                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg border focus:outline-none ${
-                      !isClassAvgMode && selectedStudentId
-                        ? 'bg-blue-50 text-blue-700 font-bold border-blue-400'
-                        : 'bg-white text-slate-700 border-slate-300'
-                    }`}
-                  >
-                    <option value="">-- Drop-down Select Student --</option>
-                    {miniTab.students.map((s) => (
-                      <option key={`editor-opt-${s.id}`} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
               {/* ADD STUDENT INPUT */}
               <div className="flex gap-2">
                 <input
